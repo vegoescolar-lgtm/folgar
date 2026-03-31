@@ -50,28 +50,44 @@
   let usuarioVego = "";
   const sonidoExito = document.getElementById('sonidoExito');
 
-  window.onload = async function() {
-    const idDocente = prompt("SISTEMA VEGO: Ingrese su ID de Docente para acceder:");
-    if (!idDocente) {
-      document.getElementById('bloqueo-msg').innerHTML = "<h2>🚫 Acceso Denegado</h2><p>Se requiere un ID válido.</p>";
-      return;
+  window.onload = function() {
+  // 1. Forzamos la aparición de la ventana inmediatamente
+  const idDocente = prompt("SISTEMA VEGO\n\nIngrese su ID o DPI de Docente para acceder:");
+
+  if (!idDocente) {
+    document.getElementById('bloqueo-msg').innerHTML = "<h2>🚫 Acceso Denegado</h2><p>Se requiere un ID válido para entrar.</p>";
+    return;
+  }
+
+  // 2. Una vez que tenemos el ID, procedemos a validar con el servidor
+  validarAcceso(idDocente);
+};
+
+async function validarAcceso(id) {
+  const statusMsg = document.getElementById('bloqueo-msg');
+  statusMsg.innerHTML = "<h2>SISTEMA VEGO</h2><p>Verificando credenciales en Tacaton 2.0...</p>";
+
+  try {
+    const resp = await fetch(URL_SERVIDOR_VEGO + "?modo=validar&id=" + id);
+    const data = await resp.json();
+
+    if (data.autorizado) {
+      usuarioVego = data.nombre;
+      document.getElementById('bloqueo-msg').style.display = "none";
+      document.getElementById('appContent').style.display = "block";
+      document.getElementById('docenteActivo').innerText = "👤 Docente: " + usuarioVego;
+    } else {
+      alert("ID No Autorizado: " + id);
+      location.reload(); // Recarga para volver a pedir el ID
     }
-    try {
-      const resp = await fetch(URL_SERVIDOR_VEGO + "?modo=validar&id=" + idDocente);
-      const data = await resp.json();
-      if (data.autorizado) {
-        usuarioVego = data.nombre;
-        document.getElementById('bloqueo-msg').style.display = "none";
-        document.getElementById('appContent').style.display = "block";
-        document.getElementById('docenteActivo').innerText = "👤 Docente: " + usuarioVego;
-      } else {
-        alert("ID de Docente no reconocido.");
-        document.getElementById('bloqueo-msg').innerHTML = "<h2>❌ ID No Autorizado</h2>";
-      }
-    } catch (e) {
-      alert("Error de conexión con Tacaton 2.0");
-    }
-  };
+  } catch (e) {
+    console.error(e);
+    // Si falla la red, permitimos el acceso pero avisamos del error
+    alert("Error de red. Entrando en modo local.");
+    document.getElementById('bloqueo-msg').style.display = "none";
+    document.getElementById('appContent').style.display = "block";
+  }
+}
 
   async function iniciarEscaneo() {
     const btn = document.getElementById('btnCamara');
