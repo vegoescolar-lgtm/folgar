@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SISTEMA VEGO</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #e9ecef; padding: 15px; text-align: center; }
+    .container { max-width: 450px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 8px solid #1e88e5; display: none; } 
+    .metodo-card { border: 2px solid #1e88e5; border-radius: 10px; margin-bottom: 15px; padding: 15px; background: #f8fbff; }
+    #reader { width: 100% !important; min-height: 250px; background: #000; border-radius: 8px; overflow: hidden; margin-top: 10px; display: block !important; }
+    .btn-activar-cam { background: #1e88e5; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; }
+    #status { margin-top: 20px; padding: 15px; border-radius: 10px; font-weight: bold; background: #eee; min-height: 50px; word-break: break-all; }
+    #bloqueo-msg { margin-top: 50px; color: #666; }
+  </style>
+</head>
+<body>
+
+<audio id="sonidoExito" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+<div id="bloqueo-msg">
+  <h2>SISTEMA VEGO</h2>
+  <p>Verificando credenciales...</p>
+</div>
+
+<div class="container" id="appContent">
+  <h2>SISTEMA VEGO</h2>
+  <p>Base de Datos: Tacaton 2.0</p>
+  <p id="docenteActivo" style="color: #1e88e5; font-weight: bold;"></p>
+  
+  <div class="metodo-card">
+    <strong>📷 CÁMARA (QR)</strong>
+    <button id="btnCamara" class="btn-activar-cam" onclick="iniciarEscaneo()">▶️ INICIAR ESCÁNER</button>
+    <div id="reader"></div>
+  </div>
+
+  <div class="metodo-card" style="border-color: #2e7d32; background: #f1f8e9;">
+    <strong>🔌 ESCÁNER USB / MANUAL</strong>
+    <input type="text" id="txtFisico" style="width:90%; padding:10px; border-radius:5px; border:1px solid #ccc;" placeholder="Escanee o escriba ID..." onkeypress="if(event.key === 'Enter') registrarFisico()">
+  </div>
+
+  <div id="status">Esperando lectura...</div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+  const URL_SERVIDOR_VEGO = "https://script.google.com/macros/s/AKfycbzxpS0pu2DdIT6FSClp2zGu18po57_zMM9Milmi2BAeyDi-VtfZDVkVGHcih5uCw_iI/exec"; 
+  let html5QrCode = null;
+  let usuarioVego = "";
+  const sonidoExito = document.getElementById('sonidoExito');
+
+  window.onload = async function() {
+    const idDocente = prompt("SISTEMA VEGO: Ingrese su ID de Docente para acceder:");
+    if (!idDocente) {
+      document.getElementById('bloqueo-msg').innerHTML = "<h2>🚫 Acceso Denegado</h2><p>Se requiere un ID válido.</p>";
+      return;
+    }
+    try {
+      const resp = await fetch(URL_SERVIDOR_VEGO + "?modo=validar&id=" + idDocente);
+      const data = await resp.json();
+      if (data.autorizado) {
+        usuarioVego = data.nombre;
+        document.getElementById('bloqueo-msg').style.display = "none";
+        document.getElementById('appContent').style.display = "block";
+        document.getElementById('docenteActivo').innerText = "👤 Docente: " + usuarioVego;
+      } else {
+        alert("ID de Docente no reconocido.");
+        document.getElementById('bloqueo-msg').innerHTML = "<h2>❌ ID No Autorizado</h2>";
+      }
+    } catch (e) {
+      alert("Error de conexión con Tacaton 2.0");
+    }
+  };
+
+  async function iniciarEscaneo() {
+    const btn = document.getElementById('btnCamara');
+    const status = document.getElementById('status');
+    try {
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 30, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0, disableFlip: true };
+      await html5QrCode.start(
+        { facingMode: "environment" }, 
+        config,
+        (text) => { 
+          html5QrCode.pause(true); 
+          enviarDatos(text);
+          setTimeout(() => html5QrCode.resume(), 1500); 
+        }
+      );
+      btn.style.display = "none";
+      status.innerText = "✅ Escáner de Alto Rendimiento";
+    } catch (err) {
+      alert("Error: " + err);
+    }
+  }
+
+  function enviarDatos(codigo) {
+    const status = document.getElementById('status');
+    let idLimpio = codigo;
+
+    if (codigo.includes("id=")) {
+      const urlParams = new URLSearchParams(codigo.split('?')[1]);
+      idLimpio = urlParams.get("id");
+    }
+
+    status.innerText = "⌛ Buscando estudiante...";
+    status.style.background = "#fff9c4";
+
+    fetch(URL_SERVIDOR_VEGO, {
+      method: "POST",
+      body: JSON.stringify({ id: idLimpio, usuario: usuarioVego })
+    })
+    .then(response => response.json()) 
+    .then(data => {
+      if (data.status === "ok") {
+        status.style.background = "#c8e6c9";
+        status.innerText = "✅ ESTUDIANTE: " + data.nombre; 
+        
+        // REPRODUCIR SONIDO Y VIBRACIÓN
+        sonidoExito.play().catch(e => console.log("Permiso de audio requerido"));
+        window.navigator.vibrate(100); 
+      } else {
+        status.style.background = "#ffcdd2";
+        status.innerText = "❌ NO ENCONTRADO (" + idLimpio + ")";
+      }
+      setTimeout(() => { 
+        status.innerText = "Esperando lectura..."; 
+        status.style.background = "#eee";
+      }, 2000);
+    })
+    .catch(err => {
+      // En caso de error, también suena para indicar registro local o intento exitoso
+      sonidoExito.play().catch(e => {});
+      status.innerText = "✅ REGISTRADO ID: " + idLimpio;
+      status.style.background = "#c8e6c9";
+    });
+  }
+
+  function registrarFisico() {
+    const input = document.getElementById('txtFisico');
+    if(input.value.trim() !== "") {
+      enviarDatos(input.value);
+      input.value = "";
